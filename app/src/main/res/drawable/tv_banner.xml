@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ink" />
+    <item android:gravity="center">
+        <shape android:shape="rectangle">
+            <solid android:color="#2A3150" />
+            <corners android:radius="18dp" />
+            <size android:width="300dp" android:height="90dp" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/feihong_logo" android:gravity="center" />
+</layer-list>

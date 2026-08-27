@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ink">#0B1020</color>
+    <color name="surface">#151E34</color>
+    <color name="surface_focused">#25355A</color>
+    <color name="gold">#FFB84D</color>
+    <color name="gold_muted">#F5B64B</color>
+    <color name="text_primary">#F5F7FB</color>
+    <color name="text_secondary">#9FAABD</color>
+    <color name="line">#34425C</color>
+    <color name="healthy">#78D3A4</color>
+    <color name="unhealthy">#F39A79</color>
+    <color name="unknown">#77869D</color>
+</resources>
