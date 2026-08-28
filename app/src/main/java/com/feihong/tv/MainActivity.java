@@ -124,13 +124,6 @@ public final class MainActivity extends Activity {
         scroller.addView(pageContent);
         root.addView(scroller, weight(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        LinearLayout navigation = new LinearLayout(this);
-        navigation.setGravity(Gravity.CENTER);
-        navigation.setOrientation(LinearLayout.HORIZONTAL);
-        navigation.setPadding(0, dp(10), 0, 0);
-        navigation.addView(navButton("首页", new View.OnClickListener() { @Override public void onClick(View v) { showHome(); } }), weight(0, dp(46), 1));
-        navigation.addView(navButton("分类", new View.OnClickListener() { @Override public void onClick(View v) { showCategories(); } }), weight(0, dp(46), 1));
-        root.addView(navigation);
         setContentView(root);
     }
 
@@ -169,7 +162,7 @@ public final class MainActivity extends Activity {
                         if (result == null) {
                             updateSourceIdentity();
                             setStatus("未找到可用资源，可按确认键进入数据源并手动添加。");
-                            showEmpty("尚未连接数据源", "按底部“数据源”或顶部当前资源，添加你的 MACCMS 数据源。");
+                            showEmpty("尚未连接数据源", "按顶部“数据源”入口添加你的 MACCMS 数据源。");
                         } else showHome();
                     }
                 });
@@ -196,7 +189,8 @@ public final class MainActivity extends Activity {
         updateSourceIdentity();
         if (active == null) {
             setStatus("尚未选择可用数据源。");
-            showEmpty("尚未连接数据源", "按确认键选择或添加 MACCMS 数据源。");
+                                    showEmpty("尚未连接数据源", "按顶部“数据源”入口选择或添加 MACCMS 数据源。");
+
             return;
         }
         setStatus(loadingText);
@@ -228,9 +222,13 @@ public final class MainActivity extends Activity {
     private void renderCategories() {
         categoryRow.removeAllViews();
         subCategoryRow.removeAllViews();
-        addSubCategoryButton("搜索", new View.OnClickListener() { @Override public void onClick(View view) { showSearchDialog(); } });
-        addSubCategoryButton("数据源", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
-        if (categories.isEmpty()) return;
+        addTopCategoryButton("首页", new View.OnClickListener() { @Override public void onClick(View view) { showHome(); } });
+        if (categories.isEmpty()) {
+            addTopCategoryButton("搜索", new View.OnClickListener() { @Override public void onClick(View view) { showSearchDialog(); } });
+            addTopCategoryButton("设置", new View.OnClickListener() { @Override public void onClick(View view) { showSettings(); } });
+            addTopCategoryButton("数据源", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
+            return;
+        }
         List<Models.Category> roots = new ArrayList<>();
         for (Models.Category category : categories) if (category.parentId == null || category.parentId.length() == 0) roots.add(category);
         if (roots.isEmpty()) roots.addAll(categories);
@@ -247,6 +245,9 @@ public final class MainActivity extends Activity {
             params.setMargins(0, 0, dp(10), 0);
             categoryRow.addView(chip, params);
         }
+        addTopCategoryButton("搜索", new View.OnClickListener() { @Override public void onClick(View view) { showSearchDialog(); } });
+        addTopCategoryButton("设置", new View.OnClickListener() { @Override public void onClick(View view) { showSettings(); } });
+        addTopCategoryButton("数据源", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
         if (selectedRootCategoryId.length() == 0) return;
         final String rootId = selectedRootCategoryId;
         List<Models.Category> children = new ArrayList<>();
@@ -263,6 +264,14 @@ public final class MainActivity extends Activity {
                 loadPage(child.id, "", "正在加载“" + child.name + "”…");
             } });
         }
+    }
+
+    private void addTopCategoryButton(String label, View.OnClickListener listener) {
+        Button button = navButton(label, listener);
+        button.setTextSize(14);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(42));
+        params.setMargins(0, 0, dp(10), 0);
+        categoryRow.addView(button, params);
     }
 
     private void addSubCategoryButton(String label, View.OnClickListener listener) {
@@ -321,11 +330,21 @@ public final class MainActivity extends Activity {
     private void showDetail(final Models.VodDetail detail) {
         currentScreen = "detail";
         pageContent.removeAllViews();
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        PosterTile poster = new PosterTile(this, detail);
+        poster.setFocusable(false);
+        hero.addView(poster, new LinearLayout.LayoutParams(dp(170), dp(250)));
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setPadding(dp(22), 0, 0, 0);
         TextView title = text(detail.name, 27, R.color.text_primary, true);
-        pageContent.addView(title);
+        info.addView(title);
         TextView meta = text(joinMeta(detail), 14, R.color.text_secondary, false);
-        meta.setPadding(0, dp(6), 0, dp(16));
-        pageContent.addView(meta);
+        meta.setPadding(0, dp(8), 0, dp(16));
+        info.addView(meta);
+        hero.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        pageContent.addView(hero, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(250)));
         if (detail.content.length() > 0) {
             TextView introTitle = text("剧情简介", 18, R.color.gold, true);
             pageContent.addView(introTitle);
@@ -407,23 +426,67 @@ public final class MainActivity extends Activity {
         startActivity(intent);
     }
 
+    private void showSettings() {
+        currentScreen = "settings";
+        pageContent.removeAllViews();
+        TextView heading = text("设置", 27, R.color.text_primary, true);
+        pageContent.addView(heading);
+        TextView intro = text("按手机端方案管理数据源、本地缓存和播放偏好", 14, R.color.text_secondary, false);
+        intro.setPadding(0, dp(6), 0, dp(18));
+        pageContent.addView(intro);
+
+        addSettingsSection("数据源管理", "当前资源：" + (sources.getActiveSource() == null ? "未连接" : sources.getActiveSource().name), new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
+        addSettingsSection("连接状态", "已保存 " + sources.getSources().size() + " 个资源，可在数据源列表中快速切换", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
+        addSettingsSection("本地缓存", "海报缓存 " + PosterTile.getCachedPosterCount(MainActivity.this) + " 项 · 播放列表和搜索记录保存在本机", new View.OnClickListener() { @Override public void onClick(View view) {
+            new AlertDialog.Builder(MainActivity.this).setTitle("清理本地缓存").setMessage("将清理已缓存的海报图片，影片与数据源不会删除。确认继续吗？").setNegativeButton("取消", null).setPositiveButton("清理", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface dialog, int which) { PosterTile.clearPosterCache(MainActivity.this); showSettings(); } }).show();
+        } });
+        addSettingsSection("离线与播放", "已下载内容优先播放；播放列表支持方向键选择和自动下一集", new View.OnClickListener() { @Override public void onClick(View view) { setStatus("离线播放策略已启用：本地内容优先，网络内容自动回退。"); } });
+        addSettingsSection("版本信息", "fsvod-tv · Android TV API 21+", null);
+    }
+
+    private void addSettingsSection(String title, String detail, View.OnClickListener listener) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(13), dp(18), dp(13));
+        card.setBackgroundResource(R.drawable.tv_focusable);
+        if (listener != null) { card.setFocusable(true); card.setFocusableInTouchMode(true); card.setOnClickListener(listener); }
+        TextView titleView = text(title, 17, R.color.text_primary, true);
+        card.addView(titleView);
+        TextView detailView = text(detail, 13, R.color.text_secondary, false);
+        detailView.setPadding(0, dp(5), 0, 0);
+        card.addView(detailView);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, dp(12));
+        pageContent.addView(card, params);
+    }
+
     private void showSearchDialog() {
+        currentScreen = "search";
+        pageContent.removeAllViews();
+        TextView heading = text("搜索影片", 27, R.color.text_primary, true);
+        pageContent.addView(heading);
+        TextView intro = text("输入片名、演员或关键词，按确认键搜索", 14, R.color.text_secondary, false);
+        intro.setPadding(0, dp(6), 0, dp(18));
+        pageContent.addView(intro);
         final EditText input = new EditText(this);
         input.setSingleLine(true);
-        input.setHint("输入片名、演员或关键词");
+        input.setHint("例如：周星驰、动作、热播");
         input.setHintTextColor(color(R.color.text_secondary));
         input.setTextColor(color(R.color.text_primary));
+        input.setTextSize(17);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        int padding = dp(20);
-        input.setPadding(padding, 0, padding, 0);
-        new AlertDialog.Builder(this).setTitle("搜索影片").setView(input).setNegativeButton("取消", null).setPositiveButton("搜索", new DialogInterface.OnClickListener() {
-            @Override public void onClick(DialogInterface dialog, int which) {
-                String keyword = input.getText().toString().trim();
-                if (keyword.length() == 0) return;
-                currentScreen = "search";
-                loadPage("", keyword, "正在搜索“" + keyword + "”…");
-            }
-        }).show();
+        input.setPadding(dp(16), 0, dp(16), 0);
+        input.setBackgroundResource(R.drawable.tv_focusable);
+        pageContent.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        Button submit = navButton("开始搜索", new View.OnClickListener() { @Override public void onClick(View view) {
+            String keyword = input.getText().toString().trim();
+            if (keyword.length() == 0) { setStatus("请输入搜索关键词。"); return; }
+            loadPage("", keyword, "正在搜索“" + keyword + "”…");
+        }});
+        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(dp(180), dp(46));
+        submitParams.topMargin = dp(14);
+        pageContent.addView(submit, submitParams);
+        input.requestFocus();
     }
 
     private void showSourceDialog() {
@@ -442,7 +505,7 @@ public final class MainActivity extends Activity {
                 final Models.Source selected = all.get(index);
                 sources.setActiveSource(selected.id);
                 updateSourceIdentity();
-                if ("categories".equals(currentScreen)) showCategories(); else showHome();
+                if ("settings".equals(currentScreen)) showSettings(); else if ("categories".equals(currentScreen)) showCategories(); else showHome();
             }
         }).setNegativeButton("关闭", null).show();
     }
