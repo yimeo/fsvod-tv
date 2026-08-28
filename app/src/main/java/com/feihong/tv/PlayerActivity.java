@@ -23,16 +23,33 @@ public final class PlayerActivity extends Activity {
     private int episodeIndex;
     private TextView caption;
     private LinearLayout episodeList;
+    private String title;
+    private String sourceName;
+    private String posterUrl;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         urls = getIntent().getStringArrayListExtra("episode_urls");
         names = getIntent().getStringArrayListExtra("episode_names");
         episodeIndex = getIntent().getIntExtra("episode_index", 0);
+        title = getIntent().getStringExtra("title");
+        sourceName = getIntent().getStringExtra("source");
+        posterUrl = getIntent().getStringExtra("poster_url");
         if (urls == null) urls = new ArrayList<>();
         if (names == null) names = new ArrayList<>();
         buildPlayer();
         playCurrent();
+    }
+
+    @Override protected void onPause() {
+        saveProgress();
+        super.onPause();
+    }
+
+    private void saveProgress() {
+        if (video == null || urls.isEmpty() || episodeIndex < 0 || episodeIndex >= urls.size()) return;
+        String episode = episodeIndex < names.size() ? names.get(episodeIndex) : "第 " + (episodeIndex + 1) + " 集";
+        WatchHistory.save(this, title, sourceName, episode, urls.get(episodeIndex), posterUrl, episodeIndex, video.getCurrentPosition(), video.getDuration());
     }
 
     @Override public boolean onKeyDown(int keyCode, KeyEvent event) {
@@ -142,7 +159,7 @@ public final class PlayerActivity extends Activity {
             return;
         }
         String name = episodeIndex < names.size() ? names.get(episodeIndex) : "第 " + (episodeIndex + 1) + " 集";
-        caption.setText(getIntent().getStringExtra("title") + " · " + name);
+        caption.setText(title + " · " + name);
         video.setVideoURI(Uri.parse(urls.get(episodeIndex)));
         renderEpisodeList();
         video.requestFocus();

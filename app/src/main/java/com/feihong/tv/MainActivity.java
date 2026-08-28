@@ -238,7 +238,7 @@ public final class MainActivity extends Activity {
                 selectedRootCategoryId = category.id;
                 selectedCategoryId = category.id;
                 currentScreen = "categories";
-                loadPage(category.id, "", "正在加载“" + category.name + "”…");
+                loadCategoryGroup(category);
             }});
             chip.setTextSize(14);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(42));
@@ -266,6 +266,45 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void loadCategoryGroup(final Models.Category root) {
+        final Models.Source active = sources.getActiveSource();
+        updateSourceIdentity();
+        if (active == null) { setStatus("尚未选择可用数据源。"); return; }
+        setStatus("正在加载“" + root.name + "”及其子分类…");
+        showLoading();
+        execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    List<Models.Category> children = new ArrayList<>();
+                    for (Models.Category category : categories) if (root.id.equals(category.parentId)) children.add(category);
+                    Collections.sort(children, new Comparator<Models.Category>() { @Override public int compare(Models.Category left, Models.Category right) { return compareIds(left.id, right.id); } });
+                    List<String> typeIds = new ArrayList<>();
+                    typeIds.add(root.id);
+                    for (Models.Category child : children) typeIds.add(child.id);
+                    java.util.LinkedHashMap<String, Models.Vod> merged = new java.util.LinkedHashMap<>();
+                    for (String typeId : typeIds) {
+                        try {
+                            Models.Page page = MacCmsClient.fetchPage(active, typeId, "", 1);
+                            for (Models.Vod item : page.items) merged.put(item.id, item);
+                        } catch (Exception ignored) { }
+                    }
+                    if (merged.isEmpty()) throw new Exception("该分类暂无影片");
+                    sources.updateHealth(active.id, "healthy");
+                    final List<Models.Vod> result = new ArrayList<>(merged.values());
+                    post(new Runnable() { @Override public void run() {
+                        updateSourceIdentity();
+                        renderCategories();
+                        renderVodGrid(result, root.name + " · 全部");
+                        setStatus("共显示 " + result.size() + " 部影片 · 已包含该一级分类的子分类");
+                    }});
+                } catch (Exception error) {
+                    sources.updateHealth(active.id, "unhealthy");
+                    post(new Runnable() { @Override public void run() { updateSourceIdentity(); setStatus("分类加载失败，请切换数据源后重试。"); showEmpty("暂无分类内容", "请检查网络或尝试其它数据源。"); }});
+                }
+            }
+        });
+    }
+
     private void addTopCategoryButton(String label, View.OnClickListener listener) {
         Button button = navButton(label, listener);
         button.setTextSize(14);
@@ -284,6 +323,7 @@ public final class MainActivity extends Activity {
 
     private void renderVodGrid(List<Models.Vod> items, String heading) {
         pageContent.removeAllViews();
+        if ("精选内容".equals(heading)) addContinueWatching();
         pageTitle = text(heading, 24, R.color.text_primary, true);
         pageContent.addView(pageTitle);
         TextView guidance = text("方向键浏览影片，确认键打开详情", 13, R.color.text_secondary, false);
@@ -309,6 +349,49 @@ public final class MainActivity extends Activity {
             row.addView(tile, tileParams);
             index++;
         }
+    }
+
+    private void addContinueWatching() {
+        final WatchHistory.Record record = WatchHistory.latest(this);
+        if (record == null) return;
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(12), dp(18), dp(12));
+        card.setBackgroundResource(R.drawable.tv_focusable);
+        card.setFocusable(true);
+        card.setFocusableInTouchMode(true);
+        card.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View view) { openHistory(record); } });
+        TextView marker = text("继续观看", 16, R.color.gold, true);
+        card.addView(marker, new LinearLayout.LayoutParams(dp(120), ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView detail = text(record.title + " · " + record.episodeName + "\n" + progressText(record), 15, R.color.text_primary, true);
+        card.addView(detail, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView arrow = text("继续  ›", 14, R.color.text_secondary, true);
+        card.addView(arrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, 0, 0, dp(22));
+        pageContent.addView(card, params);
+    }
+
+    private void openHistory(WatchHistory.Record record) {
+        ArrayList<String> historyUrls = new ArrayList<>();
+        ArrayList<String> historyNames = new ArrayList<>();
+        historyUrls.add(record.url);
+        historyNames.add(record.episodeName);
+        Intent intent = new Intent(this, PlayerActivity.class);
+        intent.putExtra("title", record.title);
+        intent.putExtra("source", record.sourceName);
+        intent.putExtra("poster_url", record.posterUrl);
+        intent.putStringArrayListExtra("episode_urls", historyUrls);
+        intent.putStringArrayListExtra("episode_names", historyNames);
+        intent.putExtra("episode_index", 0);
+        startActivity(intent);
+    }
+
+    private String progressText(WatchHistory.Record record) {
+        if (record.durationMs <= 0) return "已记录播放进度";
+        int percent = (int) Math.min(99, Math.max(0, record.positionMs * 100 / record.durationMs));
+        return "已观看 " + percent + "%";
     }
 
     private void openDetail(final Models.Vod vod) {
@@ -423,6 +506,7 @@ public final class MainActivity extends Activity {
         intent.putStringArrayListExtra("episode_names", names);
         intent.putStringArrayListExtra("episode_urls", urls);
         intent.putExtra("episode_index", current);
+        intent.putExtra("poster_url", detail.posterUrl);
         startActivity(intent);
     }
 
@@ -439,6 +523,9 @@ public final class MainActivity extends Activity {
         addSettingsSection("连接状态", "已保存 " + sources.getSources().size() + " 个资源，可在数据源列表中快速切换", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
         addSettingsSection("本地缓存", "海报缓存 " + PosterTile.getCachedPosterCount(MainActivity.this) + " 项 · 播放列表和搜索记录保存在本机", new View.OnClickListener() { @Override public void onClick(View view) {
             new AlertDialog.Builder(MainActivity.this).setTitle("清理本地缓存").setMessage("将清理已缓存的海报图片，影片与数据源不会删除。确认继续吗？").setNegativeButton("取消", null).setPositiveButton("清理", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface dialog, int which) { PosterTile.clearPosterCache(MainActivity.this); showSettings(); } }).show();
+        } });
+        addSettingsSection("观看记录", "已记录 " + WatchHistory.get(this).size() + " 条 · 首页提供继续观看入口", new View.OnClickListener() { @Override public void onClick(View view) {
+            new AlertDialog.Builder(MainActivity.this).setTitle("清理观看记录").setMessage("将删除本机所有播放进度记录。确认继续吗？").setNegativeButton("取消", null).setPositiveButton("清理", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface dialog, int which) { WatchHistory.clear(MainActivity.this); showSettings(); } }).show();
         } });
         addSettingsSection("离线与播放", "已下载内容优先播放；播放列表支持方向键选择和自动下一集", new View.OnClickListener() { @Override public void onClick(View view) { setStatus("离线播放策略已启用：本地内容优先，网络内容自动回退。"); } });
         addSettingsSection("版本信息", "fsvod-tv · Android TV API 21+", null);
