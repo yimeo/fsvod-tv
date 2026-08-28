@@ -35,6 +35,8 @@ public final class MainActivity extends Activity {
             "https://api1.066821.xyz/api.json",
             "https://api2.066821.xyz/api.json"
     };
+    private static final String OFFICIAL_CONFIG_PREFS = "feihong_tv_official_config";
+    private static final String OFFICIAL_CONFIG_ENDPOINTS = "endpoints";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -137,10 +139,23 @@ public final class MainActivity extends Activity {
         execute(new Runnable() {
             @Override public void run() {
                 List<Models.Source> found = new ArrayList<>();
-                for (String configUrl : OFFICIAL_CONFIG_URLS) {
+                List<String> configEndpoints = getOfficialConfigEndpoints();
+                for (String configUrl : configEndpoints) {
                     try {
-                        found = MacCmsClient.parseOfficialSources(MacCmsClient.getJson(configUrl));
-                        if (!found.isEmpty()) break;
+                        JSONObject payload = MacCmsClient.getJson(configUrl);
+                        found = MacCmsClient.parseOfficialSources(payload);
+                        List<String> replacement = MacCmsClient.parseOfficialConfigEndpoints(payload);
+                        if (replacement.size() >= 2 && !replacement.equals(configEndpoints)) {
+                            saveOfficialConfigEndpoints(replacement);
+                            configEndpoints = replacement;
+                            try {
+                                List<Models.Source> updatedSources = MacCmsClient.parseOfficialSources(MacCmsClient.getJson(replacement.get(0)));
+                                if (!updatedSources.isEmpty()) found = updatedSources;
+                            } catch (Exception ignored) {
+                                // 新主地址暂时不可用时，保留备用配置本次下发的资源站列表，并在下次同步重试新主地址。
+                            }
+                        }
+                        if (!found.isEmpty() || replacement.size() >= 2) break;
                     } catch (Exception ignored) { }
                 }
                 for (Models.Source source : found) sources.upsert(source);
@@ -168,6 +183,27 @@ public final class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    private List<String> getOfficialConfigEndpoints() {
+        String saved = getSharedPreferences(OFFICIAL_CONFIG_PREFS, MODE_PRIVATE).getString(OFFICIAL_CONFIG_ENDPOINTS, "");
+        List<String> endpoints = new ArrayList<>();
+        if (saved != null && saved.trim().length() > 0) {
+            for (String value : saved.split("\\n")) if (value.trim().length() > 0) endpoints.add(value.trim());
+        }
+        if (endpoints.isEmpty()) {
+            for (String value : OFFICIAL_CONFIG_URLS) endpoints.add(value);
+        }
+        return endpoints;
+    }
+
+    private void saveOfficialConfigEndpoints(List<String> endpoints) {
+        StringBuilder value = new StringBuilder();
+        for (String endpoint : endpoints) {
+            if (value.length() > 0) value.append('\n');
+            value.append(endpoint);
+        }
+        getSharedPreferences(OFFICIAL_CONFIG_PREFS, MODE_PRIVATE).edit().putString(OFFICIAL_CONFIG_ENDPOINTS, value.toString()).apply();
     }
 
     private void showHome() {

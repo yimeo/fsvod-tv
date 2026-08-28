@@ -95,6 +95,15 @@ final class MacCmsClient {
         return new Models.VodDetail(base, clean(first(raw, "vod_content", "des")), clean(first(raw, "vod_actor", "actor")), clean(first(raw, "vod_director", "director")), parsePlaySources(first(raw, "vod_play_from"), first(raw, "vod_play_url")));
     }
 
+    static List<String> parseOfficialConfigEndpoints(JSONObject config) {
+        List<String> endpoints = new ArrayList<>();
+        String primary = trim(config.optString("primaryApi"));
+        String backup = trim(config.optString("backupApi"));
+        if (isConfigUrl(primary)) endpoints.add(primary);
+        if (isConfigUrl(backup) && !endpoints.contains(backup)) endpoints.add(backup);
+        return endpoints;
+    }
+
     static List<Models.Source> parseOfficialSources(JSONObject config) {
         List<Models.Source> values = new ArrayList<>();
         JSONArray sources = config.optJSONArray("sources");
@@ -166,6 +175,16 @@ final class MacCmsClient {
             if (value.length() > 0) return value;
         }
         return "";
+    }
+
+    private static boolean isConfigUrl(String value) {
+        if (value == null) return false;
+        String lower = value.trim().toLowerCase();
+        int query = lower.indexOf('?');
+        int fragment = lower.indexOf('#');
+        int cut = query < 0 ? fragment : fragment < 0 ? query : Math.min(query, fragment);
+        if (cut >= 0) lower = lower.substring(0, cut);
+        return lower.endsWith("/api.json");
     }
 
     private static String resolveUrl(String value, String apiUrl) {
