@@ -66,6 +66,19 @@ final class MacCmsClient {
                 }
             }
         }
+        JSONArray classList = response.optJSONArray("class");
+        if (classList != null) {
+            for (int index = 0; index < classList.length(); index++) {
+                JSONObject raw = classList.optJSONObject(index);
+                if (raw == null) continue;
+                String categoryId = first(raw, "type_id", "tid", "id");
+                String categoryName = first(raw, "type_name", "name", "type");
+                String parentId = first(raw, "type_pid", "type_id_1", "parent_id", "pid");
+                if (categoryId.length() > 0 && categoryName.length() > 0) {
+                    categoryMap.put(categoryId, new Models.Category(categoryId, categoryName, "0".equals(parentId) ? "" : parentId));
+                }
+            }
+        }
         categories.addAll(categoryMap.values());
         if (response.optInt("code", 1) != 1 && items.isEmpty()) throw new Exception(response.optString("msg", "数据源未返回可用内容"));
         return new Models.Page(items, categories, Math.max(1, response.optInt("page", page)), Math.max(1, response.optInt("pagecount", 1)));

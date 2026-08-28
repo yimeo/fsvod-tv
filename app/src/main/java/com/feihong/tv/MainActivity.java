@@ -41,12 +41,14 @@ public final class MainActivity extends Activity {
     private SourceRepository sources;
     private LinearLayout pageContent;
     private LinearLayout categoryRow;
+    private LinearLayout subCategoryRow;
     private TextView pageTitle;
     private TextView sourceName;
     private TextView sourceDot;
     private TextView status;
     private List<Models.Category> categories = new ArrayList<>();
     private String selectedCategoryId = "";
+    private String selectedRootCategoryId = "";
     private String currentScreen = "home";
 
     @Override public void onCreate(Bundle state) {
@@ -106,13 +108,21 @@ public final class MainActivity extends Activity {
         categoryScroller.addView(categoryRow);
         root.addView(categoryScroller, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
 
+        HorizontalScrollView subCategoryScroller = new HorizontalScrollView(this);
+        subCategoryScroller.setHorizontalScrollBarEnabled(false);
+        subCategoryRow = new LinearLayout(this);
+        subCategoryRow.setGravity(Gravity.CENTER_VERTICAL);
+        subCategoryRow.setOrientation(LinearLayout.HORIZONTAL);
+        subCategoryScroller.addView(subCategoryRow);
+        root.addView(subCategoryScroller, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+
         ScrollView scroller = new ScrollView(this);
         scroller.setFillViewport(true);
         pageContent = new LinearLayout(this);
         pageContent.setOrientation(LinearLayout.VERTICAL);
         pageContent.setPadding(0, dp(17), 0, dp(16));
         scroller.addView(pageContent);
-        root.addView(scroller, weight(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        root.addView(scroller, weight(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
         LinearLayout navigation = new LinearLayout(this);
         navigation.setGravity(Gravity.CENTER);
@@ -120,8 +130,6 @@ public final class MainActivity extends Activity {
         navigation.setPadding(0, dp(10), 0, 0);
         navigation.addView(navButton("首页", new View.OnClickListener() { @Override public void onClick(View v) { showHome(); } }), weight(0, dp(46), 1));
         navigation.addView(navButton("分类", new View.OnClickListener() { @Override public void onClick(View v) { showCategories(); } }), weight(0, dp(46), 1));
-        navigation.addView(navButton("搜索", new View.OnClickListener() { @Override public void onClick(View v) { showSearchDialog(); } }), weight(0, dp(46), 1));
-        navigation.addView(navButton("数据源", new View.OnClickListener() { @Override public void onClick(View v) { showSourceDialog(); } }), weight(0, dp(46), 1));
         root.addView(navigation);
         setContentView(root);
     }
@@ -172,13 +180,15 @@ public final class MainActivity extends Activity {
     private void showHome() {
         currentScreen = "home";
         selectedCategoryId = "";
+        selectedRootCategoryId = "";
         loadPage("", "", "正在加载首页内容…");
     }
 
     private void showCategories() {
         currentScreen = "categories";
-        if (selectedCategoryId.length() == 0 && !categories.isEmpty()) selectedCategoryId = categories.get(0).id;
-        loadPage(selectedCategoryId, "", "正在加载分类内容…");
+        selectedCategoryId = "";
+        selectedRootCategoryId = "";
+        loadPage("", "", "正在加载全部分类内容…");
     }
 
     private void loadPage(final String typeId, final String keyword, String loadingText) {
@@ -217,6 +227,9 @@ public final class MainActivity extends Activity {
 
     private void renderCategories() {
         categoryRow.removeAllViews();
+        subCategoryRow.removeAllViews();
+        addSubCategoryButton("搜索", new View.OnClickListener() { @Override public void onClick(View view) { showSearchDialog(); } });
+        addSubCategoryButton("数据源", new View.OnClickListener() { @Override public void onClick(View view) { showSourceDialog(); } });
         if (categories.isEmpty()) return;
         List<Models.Category> roots = new ArrayList<>();
         for (Models.Category category : categories) if (category.parentId == null || category.parentId.length() == 0) roots.add(category);
@@ -224,6 +237,7 @@ public final class MainActivity extends Activity {
         Collections.sort(roots, new Comparator<Models.Category>() { @Override public int compare(Models.Category left, Models.Category right) { return compareIds(left.id, right.id); } });
         for (final Models.Category category : roots) {
             Button chip = navButton(category.name, new View.OnClickListener() { @Override public void onClick(View v) {
+                selectedRootCategoryId = category.id;
                 selectedCategoryId = category.id;
                 currentScreen = "categories";
                 loadPage(category.id, "", "正在加载“" + category.name + "”…");
@@ -233,6 +247,30 @@ public final class MainActivity extends Activity {
             params.setMargins(0, 0, dp(10), 0);
             categoryRow.addView(chip, params);
         }
+        if (selectedRootCategoryId.length() == 0) return;
+        final String rootId = selectedRootCategoryId;
+        List<Models.Category> children = new ArrayList<>();
+        for (Models.Category category : categories) if (rootId.equals(category.parentId)) children.add(category);
+        Collections.sort(children, new Comparator<Models.Category>() { @Override public int compare(Models.Category left, Models.Category right) { return compareIds(left.id, right.id); } });
+        addSubCategoryButton("全部", new View.OnClickListener() { @Override public void onClick(View view) {
+            selectedCategoryId = rootId;
+            loadPage(rootId, "", "正在加载全部分类内容…");
+        } });
+        for (final Models.Category child : children) {
+            addSubCategoryButton(child.name, new View.OnClickListener() { @Override public void onClick(View view) {
+                selectedCategoryId = child.id;
+                currentScreen = "categories";
+                loadPage(child.id, "", "正在加载“" + child.name + "”…");
+            } });
+        }
+    }
+
+    private void addSubCategoryButton(String label, View.OnClickListener listener) {
+        Button button = navButton(label, listener);
+        button.setTextSize(13);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
+        params.setMargins(0, 0, dp(10), 0);
+        subCategoryRow.addView(button, params);
     }
 
     private void renderVodGrid(List<Models.Vod> items, String heading) {
